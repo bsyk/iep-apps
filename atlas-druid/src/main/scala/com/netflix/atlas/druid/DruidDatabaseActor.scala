@@ -36,6 +36,8 @@ import com.netflix.atlas.core.model.Query
 import com.netflix.atlas.core.model.Query.KeyQuery
 import com.netflix.atlas.core.model.Query.KeyValueQuery
 import com.netflix.atlas.core.model.Query.PatternQuery
+import com.netflix.atlas.core.model.Query.allKeys
+import com.netflix.atlas.core.model.Query.dnfList
 import com.netflix.atlas.core.model.Tag
 import com.netflix.atlas.core.model.TagKey
 import com.netflix.atlas.core.model.TimeSeries
@@ -589,6 +591,14 @@ object DruidDatabaseActor {
     expr: DataExpr
   ): List[(Map[String, String], DruidClient.Metric, DataQuery)] = {
     val query = expr.query
+
+    if (!dnfList(query).forall(q => allKeys(q).contains("name"))) {
+      // Ignore queries that don't explicitly provide a metric name.
+      // Allow a regex or even a :has. This is to avoid sending queries that
+      // accidentally match a large number of metrics.
+      return List.empty
+    }
+
     val metrics = metadata.datasources.flatMap { ds =>
       ds.metrics.filter(m => query.couldMatch(m.tags)).map { m =>
         m -> ds.datasource.dimensions

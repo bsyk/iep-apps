@@ -260,7 +260,7 @@ class DruidDatabaseActorSuite extends FunSuite {
   }
 
   test("toDruidQueries: simple sum") {
-    val expr = DataExpr.Sum(Query.Equal("a", "1"))
+    val expr = DataExpr.Sum(Query.And(Query.Regex("name",".*"), Query.Equal("a", "1")))
     val queries = toDruidQueries(metadata, toTestDruidQueryContext(expr), context, expr)
 
     assertEquals(queries.size, 4)
@@ -270,7 +270,7 @@ class DruidDatabaseActorSuite extends FunSuite {
   }
 
   test("toDruidQueries: unknown dimensions") {
-    val expr = DataExpr.Sum(Query.HasKey("c"))
+    val expr = DataExpr.Sum(Query.And(Query.Regex("name",".*"), Query.HasKey("c")))
     val queries = toDruidQueries(metadata, toTestDruidQueryContext(expr), context, expr)
 
     assertEquals(queries.size, 2)
@@ -280,7 +280,7 @@ class DruidDatabaseActorSuite extends FunSuite {
   }
 
   test("toDruidQueries: unknown dimensions missing") {
-    val expr = DataExpr.Sum(Query.Not(Query.HasKey("c")))
+    val expr = DataExpr.Sum(Query.And(Query.Regex("name",".*"), Query.Not(Query.HasKey("c"))))
     val queries = toDruidQueries(metadata, toTestDruidQueryContext(expr), context, expr)
 
     assertEquals(queries.size, 4)
@@ -290,10 +290,30 @@ class DruidDatabaseActorSuite extends FunSuite {
   }
 
   test("toDruidQueries: or with one missing dimension") {
-    val expr = DataExpr.Sum(Query.Or(Query.Equal("a", "1"), Query.Equal("d", "2")))
+    val expr = DataExpr.Sum(Query.And(Query.Regex("name",".*"), Query.Or(Query.Equal("a", "1"), Query.Equal("d", "2"))))
     val queries = toDruidQueries(metadata, toTestDruidQueryContext(expr), context, expr)
     assert(queries.forall(_._1.contains("a")))
     queries.forall(_._3.asInstanceOf[TimeseriesQuery].context == toTestDruidQueryContext(expr))
+  }
+
+  test("toDruidQueries: ignore if name not included") {
+    val expr = DataExpr.Sum(Query.Equal("a", "1"))
+    val queries = toDruidQueries(metadata, toTestDruidQueryContext(expr), context, expr)
+    assert(queries.isEmpty)
+  }
+
+  test("toDruidQueries: ignore if name not included in subqueries") {
+    val expr = DataExpr.Sum(
+      Query.Or(
+        Query.And(
+          Query.Equal("name", "m1"),
+          Query.Equal("b", "foo")
+        ),
+        Query.Equal("c", "m3")
+      )
+    )
+    val queries = toDruidQueries(metadata, toTestDruidQueryContext(expr), context, expr)
+    assert(queries.isEmpty)
   }
 
   test("toDruidQueries: or with name dimension") {
